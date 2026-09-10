@@ -125,6 +125,11 @@ body.force-mobile .modal-box{max-width:100%}
 .footer{padding-top:18px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
 .tag-src{font-size:10.5px;color:#8593a3;font-style:italic}
 code.cite{background:#eef2f5;border-radius:5px;padding:1px 5px;font-size:11px;color:#455368}
+.po-upload{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.po-filebtn{display:inline-flex;align-items:center;gap:6px;background:var(--navy);color:#fff;padding:9px 16px;border-radius:9px;cursor:pointer;font-size:13.5px;font-weight:650;white-space:nowrap}
+.po-filebtn:hover{background:var(--navy2)}
+.po-filebtn input{display:none}
+.po-filename{font-size:13px;color:var(--muted)}
 
 /* ---- Mobile-forced simulator (device toggle) ---- */
 body.force-mobile{background:#1c2733;padding:26px 0}
@@ -751,8 +756,15 @@ body.force-mobile .tracewrap{overflow:auto}
       </div>
     </section>
 
-    <section id="set10"><div class="section-head"><div><h2>Set 10 — PO / ใบซื้อขาย Reconciliation</h2><p>เทียบยอดเงินจากใบ PO/ใบซื้อขายที่อัปโหลดกับยอด "เงินเข้า" ในสเตทเมนต์ — หัวข้อไม่บังคับ — <span class="tag-src">แสดงเสมอไม่ว่าจะเลือกดูไฟล์ใด (ไม่มีไฟล์ PO อัปโหลดในการวิเคราะห์นี้)</span></p></div></div>
-      <div class="card panel"><p style="margin:0;color:var(--muted)"><b>N/A</b> — ไม่มีข้อมูล PO/ใบซื้อขายที่อัปโหลดสำหรับการวิเคราะห์ครั้งนี้ (ไม่บังคับ — อัปโหลดไฟล์ PO แล้วรันใหม่หากต้องการเทียบ)</p></div>
+    <section id="set10"><div class="section-head"><div><h2>Set 10 — PO / ใบซื้อขาย Reconciliation</h2><p>อัปโหลดไฟล์ PO/ใบซื้อขาย (CSV) เพื่อเทียบยอดกับ "เงินเข้า" ที่สกัดได้จริงจากสเตทเมนต์ — หัวข้อไม่บังคับ — <span class="tag-src">ประมวลผลในเบราว์เซอร์ของคุณล้วน ไฟล์ไม่ถูกส่งออกจากเครื่องไปที่ใด</span></p></div></div>
+      <div class="card panel">
+        <div class="po-upload">
+          <label class="po-filebtn">📎 เลือกไฟล์ PO (.csv)<input type="file" id="poFileInput" accept=".csv,.txt" onchange="handlePOFile(this.files[0])"></label>
+          <span id="poFileName" class="po-filename">ยังไม่ได้เลือกไฟล์</span>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:8px 0 0">รูปแบบไฟล์: CSV ที่มีหัวตารางอย่างน้อย "วันที่" และ "ยอด/จำนวนเงิน" (ยิ่งมีคอลัมน์ชื่อคู่ค้า/เลขที่ PO ยิ่งอ่านง่ายขึ้น) — พรีวิวนี้รองรับเฉพาะ CSV เท่านั้น ฟีเจอร์จริงในตัวเครื่องมือจะรองรับ Excel/PDF ด้วย</p>
+        <div id="poResults"><p style="margin:10px 0 0;color:var(--muted)"><b>N/A</b> — ยังไม่ได้อัปโหลดไฟล์ PO สำหรับการวิเคราะห์นี้ (ไม่บังคับ — เลือกไฟล์ด้านบนเพื่อเริ่มเทียบยอด)</p></div>
+      </div>
     </section>
 
     <section id="set11"><div class="section-head"><div><h2>Set 11 — สรุปรายรับ-รายจ่ายรวมรายเดือน</h2><p>ต่อเนื่องจากตาราง Monthly Summary ของ Set 8</p></div></div>
@@ -895,6 +907,108 @@ body.force-mobile .tracewrap{overflow:auto}
     g.items.forEach((t,i)=>{ html += '<tr><td>'+(i+1)+'</td><td>'+t.date+'</td><td>'+t.time+'</td><td class="money">'+fmtMoney(t.amt)+'</td><td><code class="cite">p.'+t.page+'</code></td></tr>'; });
     html += '</table></div>';
     openModal(g.party+' — ทุกธุรกรรม ('+g.n+' ครั้ง)', html);
+  }
+
+  // ---- Set 10: PO/ใบซื้อขาย upload + reconciliation — runs entirely client-side, nothing leaves the browser ----
+  function handlePOFile(file){
+    if(!file) return;
+    document.getElementById('poFileName').textContent = file.name+' ('+(file.size/1024).toFixed(1)+' KB)';
+    const reader = new FileReader();
+    reader.onload = function(e){
+      try{
+        const rows = parsePOCsv(String(e.target.result));
+        renderPOResults(rows, file.name);
+      }catch(err){
+        document.getElementById('poResults').innerHTML = '<p style="margin:10px 0 0;color:var(--red)">อ่านไฟล์ไม่สำเร็จ: '+escapeHtml(err.message)+' — ตรวจสอบว่าเป็นไฟล์ CSV ที่มีหัวตารางถูกต้อง</p>';
+      }
+    };
+    reader.onerror = function(){
+      document.getElementById('poResults').innerHTML = '<p style="margin:10px 0 0;color:var(--red)">ไม่สามารถอ่านไฟล์นี้ได้</p>';
+    };
+    reader.readAsText(file, 'utf-8');
+  }
+
+  function parsePOCsvLine(line){
+    const out=[]; let cur=''; let inQ=false;
+    for(let i=0;i<line.length;i++){
+      const c = line[i];
+      if(inQ){
+        if(c==='"'){ if(line[i+1]==='"'){ cur+='"'; i++; } else inQ=false; }
+        else cur+=c;
+      } else {
+        if(c==='"') inQ=true;
+        else if(c===','){ out.push(cur); cur=''; }
+        else cur+=c;
+      }
+    }
+    out.push(cur);
+    return out.map(s=>s.trim());
+  }
+
+  function parsePOCsv(text){
+    const lines = text.replace(/^﻿/,'').replace(/\r/g,'').split('\n').filter(l=>l.trim()!=='');
+    if(lines.length<2) throw new Error('ไม่พบข้อมูล (ต้องมีอย่างน้อย 1 แถวหัวตาราง + 1 แถวข้อมูล)');
+    const header = parsePOCsvLine(lines[0]).map(h=>h.toLowerCase());
+    const findCol = (keys) => header.findIndex(h => keys.some(k=>h.includes(k)));
+    const dateCol = findCol(['วันที่','date']);
+    const amtCol  = findCol(['ยอด','จำนวนเงิน','amount','total','มูลค่า']);
+    const nameCol = findCol(['ชื่อ','ลูกค้า','คู่ค้า','vendor','customer','ผู้ขาย']);
+    const poCol   = findCol(['เลขที่','po no','po number','เลข po','ref']);
+    if(amtCol===-1) throw new Error('ไม่พบคอลัมน์ยอดเงิน (ต้องมีหัวตารางที่มีคำว่า "ยอด" / "จำนวนเงิน" / "amount" / "total")');
+    const rows = [];
+    for(let i=1;i<lines.length;i++){
+      const cells = parsePOCsvLine(lines[i]);
+      if(cells.every(c=>c==='')) continue;
+      const rawAmt = (cells[amtCol]||'').replace(/[,\s฿บาท]/g,'');
+      const amt = parseFloat(rawAmt);
+      if(isNaN(amt)) continue;
+      rows.push({
+        date: dateCol>-1 ? cells[dateCol] : '',
+        amt: amt,
+        name: nameCol>-1 ? cells[nameCol] : '',
+        poNo: poCol>-1 ? cells[poCol] : ''
+      });
+    }
+    if(rows.length===0) throw new Error('อ่านแถวข้อมูลไม่ได้เลย — ตรวจสอบฟอร์แมตไฟล์ (ต้องเป็น CSV คั่นด้วยจุลภาค)');
+    return rows;
+  }
+
+  function matchPOAmount(amt){
+    const d = loadFullData();
+    const matches = [];
+    ['stm_personal','stm_corp','hist_jul','hist_aug'].forEach(file=>{
+      if(!d[file] || !d[file].fullIn) return;
+      d[file].fullIn.forEach(r=>{
+        if(Math.abs(r.sum-amt) < 0.01) matches.push({file, party:r.party, n:r.n, sum:r.sum});
+      });
+    });
+    return matches;
+  }
+
+  function renderPOResults(rows, fname){
+    let matchedCount = 0;
+    let html = '<p style="font-size:12.5px;color:var(--muted);margin:10px 0 8px">ไฟล์: <b>'+escapeHtml(fname)+'</b> — พบ '+rows.length+' รายการ PO — เทียบกับยอด "เงินเข้า" (fullIn) ที่สกัดได้จริงจาก 4 Statement</p>';
+    html += '<div class="table-wrap tracewrap"><table><tr><th>วันที่ (PO)</th><th>เลขที่/อ้างอิง</th><th>คู่ค้า (PO)</th><th class="money">ยอด PO</th><th>ผลจับคู่</th></tr>';
+    rows.forEach(r=>{
+      const matches = matchPOAmount(r.amt);
+      if(matches.length) matchedCount++;
+      let statusHtml;
+      if(matches.length===0){
+        statusHtml = '<span class="badge high">ไม่พบยอดตรงกัน</span>';
+      } else {
+        statusHtml = matches.map(m=>{
+          const single = m.n===1;
+          const cls = single ? 'confirmed' : 'watch';
+          const label = single ? 'ตรงเป๊ะ (รายการเดียว)' : 'ตรงยอดรวม×'+m.n+' ครั้ง';
+          return '<span class="badge '+cls+'">'+label+' — '+escapeHtml(m.file)+'</span>';
+        }).join(' ');
+      }
+      html += '<tr><td>'+escapeHtml(r.date)+'</td><td>'+escapeHtml(r.poNo)+'</td><td>'+escapeHtml(r.name)+'</td><td class="money">'+fmtMoney(r.amt)+'</td><td>'+statusHtml+'</td></tr>';
+    });
+    html += '</table></div>';
+    const pct = rows.length ? (matchedCount/rows.length*100).toFixed(1) : '0';
+    html += '<p style="font-size:12px;color:var(--muted);margin-top:10px">สรุป: จับคู่ได้ '+matchedCount+' / '+rows.length+' รายการ ('+pct+'%) — <b>หมายเหตุสำคัญ:</b> การจับคู่นี้เทียบกับ "ยอดรวมต่อคู่ค้า" ที่สกัดได้ในพรีวิวนี้เท่านั้น หากคู่ค้ารายนั้นมีธุรกรรมมากกว่า 1 ครั้ง ยอดที่ตรงกันอาจไม่ใช่ธุรกรรมเดียวกับใบ PO นี้เจาะจง — ฟีเจอร์จริงในตัวเครื่องมือจะเทียบเป็นรายธุรกรรม/รายวันแทน [ต้องตรวจโดยผู้วิเคราะห์]</p>';
+    document.getElementById('poResults').innerHTML = html;
   }
 </script>
 </body>
